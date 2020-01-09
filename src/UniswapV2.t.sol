@@ -107,3 +107,26 @@ contract ExchangeTest is DSTest {
         assertEq(token0.balanceOf(address(user)), 453305446940074565);
     }
 }
+
+contract StubString {
+    string public name;
+    constructor() public {
+        name = "Uniswap V2";
+    }
+}
+
+contract SubStringTest is DSTest {
+    StubString stubstring;
+    function setUp() public {
+        stubstring = new StubString();
+    }
+
+    function test_checkName() public {
+        string memory name = stubstring.name();
+        bytes32 name32;
+        assembly {
+            name32 := mload(add(name, 0x20))
+        }
+        assertEq(name32, "Uniswap V2");
+    }
+}
