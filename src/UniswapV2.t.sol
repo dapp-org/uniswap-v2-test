@@ -22,16 +22,16 @@ contract ExchangeUser {
       exchange.transfer(address(exchange), amount);
     }
 
-    function make() public {
-      exchange.make();
+    function mint() public {
+      exchange.mint(address(this));
     }
 
-    function made() public {
-      exchange.made();
+    function burn() public {
+      exchange.burn(address(this));
     }
 
-    function move(DSToken tokenIn, uint amountOut) public {
-      exchange.move(address(tokenIn), amountOut);
+    function swap(DSToken tokenIn, uint amountOut) public {
+      exchange.swap(address(tokenIn), amountOut, address(this));
     }
 }
 
@@ -45,7 +45,7 @@ contract ExchangeTest is DSTest {
     function setUp() public {
         token0   = new DSToken("TST-0");
         token1   = new DSToken("TST-1");
-        factory  = new UniswapV2Factory(type(UniswapV2).creationCode, address(this));
+        factory  = new UniswapV2Factory(address(this));
         exchange = UniswapV2(factory.createExchange(address(token0), address(token1)));
         user      = new ExchangeUser(exchange);
         token0.mint(address(user), 10 ether);
@@ -56,19 +56,22 @@ contract ExchangeTest is DSTest {
     function addLiquidity(uint amount0, uint amount1) internal {
         user.push(token0, amount0);
         user.push(token1, amount1);
-        user.make();
+        user.mint();
     }
 
     // Transfer liquidity tokens and exit
     function removeLiquidity(uint amount) internal {
         user.push(amount);
-        user.made();
+        user.burn();
     }
 
     function test_join() public {
         addLiquidity(10, 40);
-        assertEq(uint(exchange.reserve0()), 40);
-        assertEq(uint(exchange.reserve1()), 10);
+
+        (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+        assertEq(uint(reserve0), 40);
+        assertEq(uint(reserve1), 10);
+
         assertEq(token0.balanceOf(address(exchange)), 10);
         assertEq(token1.balanceOf(address(exchange)), 40);
         assertEq(exchange.balanceOf(address(user)), 20);
@@ -80,8 +83,11 @@ contract ExchangeTest is DSTest {
         addLiquidity(10, 40);
         assertEq(exchange.balanceOf(address(user)), 20);
         removeLiquidity(20);
-        assertEq(uint(exchange.reserve0()), 0);
-        assertEq(uint(exchange.reserve1()), 0);
+
+        (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+        assertEq(uint(reserve0), 0);
+        assertEq(uint(reserve1), 0);
+
         assertEq(token0.balanceOf(address(exchange)), 0);
         assertEq(token1.balanceOf(address(exchange)), 0);
         assertEq(exchange.balanceOf(address(user)), 0);
@@ -93,7 +99,7 @@ contract ExchangeTest is DSTest {
     function test_swap0() public {
         addLiquidity(5 ether, 10 ether);
         user.push(token0, 1 ether);
-        user.move(token0, 1662497915624478906);
+        user.swap(token0, 1662497915624478906);
         assertEq(token0.balanceOf(address(user)), 4 ether);
         assertEq(token1.balanceOf(address(user)), 1662497915624478906);
     }
@@ -102,7 +108,7 @@ contract ExchangeTest is DSTest {
     function test_swap1() public {
         addLiquidity(10 ether, 5 ether);
         user.push(token1, 1 ether);
-        user.move(token1, 453305446940074565);
+        user.swap(token1, 453305446940074565);
         assertEq(token1.balanceOf(address(user)), 4 ether);
         assertEq(token0.balanceOf(address(user)), 453305446940074565);
     }

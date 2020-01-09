@@ -5,11 +5,11 @@ import {UniswapV2} from "contracts/UniswapV2.sol";
 import {UniswapV2Factory} from "contracts/UniswapV2Factory.sol";
 
 contract FactoryOwner {
-    function setFactoryOwner(UniswapV2Factory factory, address owner) public {
-        factory.setFactoryOwner(owner);
+    function setFeeOwner(UniswapV2Factory factory, address owner) public {
+        factory.setFeeToSetter(owner);
     }
     function setFeeRecipient(UniswapV2Factory factory, address recipient) public {
-        factory.setFeeRecipient(recipient);
+        factory.setFeeTo(recipient);
     }
 }
 
@@ -19,35 +19,35 @@ contract FactoryTest is DSTest {
 
     function setUp() public {
         owner   = new FactoryOwner();
-        factory = new UniswapV2Factory(type(UniswapV2).creationCode, address(owner));
+        factory = new UniswapV2Factory(address(owner));
     }
 }
 
 contract Admin is FactoryTest {
     address who = address(0xdeadbeef);
 
-    function test_initial_factory_owner() public {
-        assertEq(factory.factoryOwner(), address(owner));
+    function test_initial_fee_owner() public {
+        assertEq(factory.feeToSetter(), address(owner));
     }
 
-    function test_update_factory_owner() public {
-        assertEq(factory.factoryOwner(), address(owner));
-        owner.setFactoryOwner(factory, who);
-        assertEq(factory.factoryOwner(), who);
+    function test_update_fee_owner() public {
+        assertEq(factory.feeToSetter(), address(owner));
+        owner.setFeeOwner(factory, who);
+        assertEq(factory.feeToSetter(), who);
     }
 
-    function testFail_update_factory_owner() public {
-        factory.setFactoryOwner(who);
+    function testFail_update_fee_owner() public {
+        factory.setFeeToSetter(who);
     }
 
     function test_update_fee_recipient() public {
-        assertEq(factory.feeRecipient(), address(0));
+        assertEq(factory.feeTo(), address(0));
         owner.setFeeRecipient(factory, who);
-        assertEq(factory.feeRecipient(), who);
+        assertEq(factory.feeTo(), who);
     }
 
     function testFail_update_fee_recipient() public {
-        factory.setFeeRecipient(who);
+        factory.setFeeTo(who);
     }
 }
 
@@ -62,10 +62,6 @@ contract ExchangeFactory is FactoryTest {
         bytes32 init = keccak256(type(UniswapV2).creationCode);
         bytes32 hash = keccak256(abi.encodePacked(hex"ff", factory, salt, init));
         return address(uint160(uint256(hash)));
-    }
-
-    function test_exchange_bytecode() public {
-        assertEq0(factory.exchangeBytecode(), type(UniswapV2).creationCode);
     }
 
     function test_create_exchange_0() public {
@@ -108,12 +104,5 @@ contract ExchangeFactory is FactoryTest {
         address exchange = factory.createExchange(tokenA, tokenB);
         assertEq(factory.getExchange(tokenA, tokenB), exchange);
         assertEq(factory.getExchange(tokenB, tokenA), exchange);
-    }
-
-    function test_find_tokens_by_exchange_address() public {
-        address exchange = factory.createExchange(tokenC, tokenD);
-        (address token0, address token1) = factory.getTokens(exchange);
-        assertEq(token0, tokenC);
-        assertEq(token1, tokenD);
     }
 }
