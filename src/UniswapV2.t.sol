@@ -2,13 +2,13 @@ pragma solidity 0.5.15;
 
 import {DSTest} from "ds-test/test.sol";
 import {DSToken} from "ds-token/token.sol";
-import {UniswapV2} from "contracts/UniswapV2.sol";
+import {UniswapV2Exchange} from "contracts/UniswapV2Exchange.sol";
 import {UniswapV2Factory} from "contracts/UniswapV2Factory.sol";
 
 contract ExchangeUser {
-    UniswapV2 exchange;
+    UniswapV2Exchange exchange;
 
-    constructor(UniswapV2 _exchange) public {
+    constructor(UniswapV2Exchange _exchange) public {
       exchange = _exchange;
     }
 
@@ -36,17 +36,17 @@ contract ExchangeUser {
 }
 
 contract ExchangeTest is DSTest {
-    UniswapV2        exchange;
-    UniswapV2Factory factory;
-    DSToken          token0;
-    DSToken          token1;
-    ExchangeUser     user;
+    UniswapV2Exchange exchange;
+    UniswapV2Factory  factory;
+    DSToken           token0;
+    DSToken           token1;
+    ExchangeUser      user;
 
     function setUp() public {
         token0   = new DSToken("TST-0");
         token1   = new DSToken("TST-1");
         factory  = new UniswapV2Factory(address(this));
-        exchange = UniswapV2(factory.createExchange(address(token0), address(token1)));
+        exchange = UniswapV2Exchange(factory.createExchange(address(token0), address(token1)));
         user      = new ExchangeUser(exchange);
     }
 

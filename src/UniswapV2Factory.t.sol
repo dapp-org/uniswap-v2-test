@@ -1,7 +1,7 @@
 pragma solidity 0.5.15;
 
 import {DSTest} from "ds-test/test.sol";
-import {UniswapV2} from "contracts/UniswapV2.sol";
+import {UniswapV2Exchange} from "contracts/UniswapV2Exchange.sol";
 import {UniswapV2Factory} from "contracts/UniswapV2Factory.sol";
 
 contract FactoryOwner {
@@ -59,7 +59,7 @@ contract ExchangeFactory is FactoryTest {
 
     function create2address(address token0, address token1) internal view returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-        bytes32 init = keccak256(type(UniswapV2).creationCode);
+        bytes32 init = keccak256(type(UniswapV2Exchange).creationCode);
         bytes32 hash = keccak256(abi.encodePacked(hex"ff", factory, salt, init));
         return address(uint160(uint256(hash)));
     }
