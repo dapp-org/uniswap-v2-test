@@ -48,6 +48,9 @@ contract ExchangeTest is DSTest {
         factory  = new UniswapV2Factory(address(this));
         exchange = UniswapV2(factory.createExchange(address(token0), address(token1)));
         user      = new ExchangeUser(exchange);
+    }
+
+    function giftSome() internal {
         token0.mint(address(user), 10 ether);
         token1.mint(address(user), 10 ether);
     }
@@ -66,12 +69,11 @@ contract ExchangeTest is DSTest {
     }
 
     function test_join() public {
+        giftSome();
         addLiquidity(10, 40);
-
         (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
         assertEq(uint(reserve0), 40);
         assertEq(uint(reserve1), 10);
-
         assertEq(token0.balanceOf(address(exchange)), 10);
         assertEq(token1.balanceOf(address(exchange)), 40);
         assertEq(exchange.balanceOf(address(user)), 20);
@@ -79,7 +81,49 @@ contract ExchangeTest is DSTest {
         assertEq(exchange.balanceOf(address(exchange)), 0);
     }
 
+    // the totalSupply should be the geometric mean of the reserves, usually expressed as
+    // k = sqrt(x * y). Since we are dealing with integers and not real numbers, it can only
+    // be approximated by the integer square root, so we actually check:
+    // totalSupply ^ 2  <= x * y < (totalSupply + 1) ^ 2
+    function assert_k_invariant_strict() public {
+      (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+      uint totalSupply = exchange.totalSupply();
+      assertTrue(totalSupply * totalSupply <= uint(reserve0) * uint(reserve1));
+      assertTrue((totalSupply + 1) ** 2 > uint(reserve0) * uint(reserve1));
+    }
+
+    function assert_k_at_least() public {
+      (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+      uint totalSupply = exchange.totalSupply();
+      assertTrue(totalSupply * totalSupply <= uint(reserve0) * uint(reserve1));
+    }
+
+    // testing join with all abstract arguments.
+    // runs join twice in order to test both flavors of the liquidity increase
+    // in order to get relatively reasonable arguments and not get stuck in a bunch
+    // of math overflow, let's start with some modestly sized numbers
+    function test_join_abstract(uint64 fstA, uint64 fstB, uint64 sndA, uint64 sndB) public {
+      assertEq(exchange.totalSupply(), 0);
+      token0.mint(address(user), uint(fstA) + uint(sndA));
+      token1.mint(address(user), uint(fstB) + uint(sndB));
+      addLiquidity(fstA, fstB);
+      assert_k_invariant_strict();
+      addLiquidity(sndA, sndB);
+      //after the second round, we don't have k strictly - only optimal joins result in strict k.
+      assert_k_at_least();
+    }
+
+    // Integer square root (isqrt) satisfies:
+    // isqrt(x) ^ 2 <= x < (isqrt(x) + 1) ^ 2
+    
+    function test_sqrt(uint112 x) public {
+      Math math = new Math();
+      assertTrue(math.sqrt(x) ** 2 <= x);
+      assertTrue(x < (math.sqrt(x) + 1) ** 2);
+    }
+
     function test_exit() public {
+        giftSome();
         addLiquidity(10, 40);
         assertEq(exchange.balanceOf(address(user)), 20);
         removeLiquidity(20);
@@ -97,6 +141,7 @@ contract ExchangeTest is DSTest {
 
     // token0 in -> token1 out
     function test_swap0() public {
+        giftSome();
         addLiquidity(5 ether, 10 ether);
         user.push(token0, 1 ether);
         user.swap(token0, 1662497915624478906);
@@ -106,6 +151,7 @@ contract ExchangeTest is DSTest {
 
     // token1 in -> token0 out
     function test_swap1() public {
+        giftSome();
         addLiquidity(10 ether, 5 ether);
         user.push(token1, 1 ether);
         user.swap(token1, 453305446940074565);
@@ -135,4 +181,20 @@ contract SubStringTest is DSTest {
         }
         assertEq(name32, "Uniswap V2");
     }
+}
+
+
+contract Math {
+  function sqrt(uint y) public pure returns (uint z) {
+    if (y > 3) {
+      uint x = (y + 1) / 2;
+      z = y;
+      while (x < z) {
+        z = x;
+        x = (y / x + x) / 2;
+      }
+    } else if (y != 0) {
+      z = 1;
+    }
+  }
 }
