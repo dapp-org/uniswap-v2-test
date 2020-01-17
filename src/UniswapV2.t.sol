@@ -35,7 +35,22 @@ contract ExchangeUser {
     }
 }
 
-contract ExchangeTest is DSTest {
+contract Math {
+  function sqrt(uint y) public pure returns (uint z) {
+    if (y > 3) {
+      uint x = y / 2 + 1;
+      z = y;
+      while (x < z) {
+        z = x;
+        x = (y / x + x) / 2;
+      }
+    } else if (y != 0) {
+      z = 1;
+    }
+  }
+}
+
+contract ExchangeTest is DSTest, Math {
     UniswapV2Exchange exchange;
     UniswapV2Factory  factory;
     DSToken           token0;
@@ -71,7 +86,7 @@ contract ExchangeTest is DSTest {
     function test_join() public {
         giftSome();
         addLiquidity(10, 40);
-        (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+        (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
         assertEq(uint(reserve0), 40);
         assertEq(uint(reserve1), 10);
         assertEq(token0.balanceOf(address(exchange)), 10);
@@ -86,14 +101,14 @@ contract ExchangeTest is DSTest {
     // be approximated by the integer square root, so we actually check:
     // totalSupply ^ 2  <= x * y < (totalSupply + 1) ^ 2
     function assert_k_invariant_strict() public {
-      (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+      (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
       uint totalSupply = exchange.totalSupply();
       assertTrue(totalSupply * totalSupply <= uint(reserve0) * uint(reserve1));
       assertTrue((totalSupply + 1) ** 2 > uint(reserve0) * uint(reserve1));
     }
 
     function assert_k_at_least() public {
-      (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+      (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
       uint totalSupply = exchange.totalSupply();
       assertTrue(totalSupply * totalSupply <= uint(reserve0) * uint(reserve1));
     }
@@ -108,6 +123,7 @@ contract ExchangeTest is DSTest {
       token1.mint(address(user), uint(fstB) + uint(sndB));
       addLiquidity(fstA, fstB);
       assert_k_invariant_strict();
+      //the second time is unlikely to be optimal
       addLiquidity(sndA, sndB);
       //after the second round, we don't have k strictly - only optimal joins result in strict k.
       assert_k_at_least();
@@ -115,12 +131,37 @@ contract ExchangeTest is DSTest {
 
     // Integer square root (isqrt) satisfies:
     // isqrt(x) ^ 2 <= x < (isqrt(x) + 1) ^ 2
-    
-    function test_sqrt(uint112 x) public {
-      Math math = new Math();
-      assertTrue(math.sqrt(x) ** 2 <= x);
-      assertTrue(x < (math.sqrt(x) + 1) ** 2);
+    // However, if y is equal to or larger than
+    // sqrt(2^256) = 
+    // 340282366920938463463374607431768211455,
+    // (y + 1) ** 2 will overflow
+    function test_sqrt(uint x) public {
+      uint y = sqrt(x);
+      assertTrue(y ** 2 <= x);
+      if (y >= 340282366920938463463374607431768211455) {
+        assertTrue((y + 1) ** 2 < x);
+      } else {
+        assertTrue(x < (y + 1) ** 2);
+      }
     }
+
+    function test_sqrt_square_inv(uint y) public {
+      if (y < 340282366920938463463374607431768211455) {
+        assertEq(y, sqrt(y ** 2));
+      }
+    }
+
+    // large test cases that actually cause the if clause
+    // of `test_sqrt(uint x)` to trigger are rare.
+    // Here are some more concrete tests.
+    function test_sqrt_max() public {
+      test_sqrt(uint(-1));
+      test_sqrt(uint(-2));
+      test_sqrt(uint(-10));
+      test_sqrt(0);
+      test_sqrt(1);
+    }
+
 
     function test_exit() public {
         giftSome();
@@ -128,7 +169,7 @@ contract ExchangeTest is DSTest {
         assertEq(exchange.balanceOf(address(user)), 20);
         removeLiquidity(20);
 
-        (uint112 reserve0, uint112 reserve1, uint32 _) = exchange.getReserves();
+        (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
         assertEq(uint(reserve0), 0);
         assertEq(uint(reserve1), 0);
 
@@ -184,17 +225,3 @@ contract SubStringTest is DSTest {
 }
 
 
-contract Math {
-  function sqrt(uint y) public pure returns (uint z) {
-    if (y > 3) {
-      uint x = (y + 1) / 2;
-      z = y;
-      while (x < z) {
-        z = x;
-        x = (y / x + x) / 2;
-      }
-    } else if (y != 0) {
-      z = 1;
-    }
-  }
-}
