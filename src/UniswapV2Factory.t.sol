@@ -1,4 +1,4 @@
-pragma solidity 0.5.15;
+pragma solidity 0.5.16;
 
 import {DSTest} from "ds-test/test.sol";
 import {UniswapV2Exchange} from "contracts/UniswapV2Exchange.sol";
@@ -97,7 +97,7 @@ contract ExchangeFactory is FactoryTest {
         factory.createExchange(tokenC, tokenD);
         factory.createExchange(tokenA, tokenC);
         factory.createExchange(tokenB, tokenD);
-        assertEq(factory.exchangesCount(), 4);
+        assertEq(factory.allExchangesLength(), 4);
     }
 
     function test_find_exchange_by_token_address() public {

@@ -1,4 +1,4 @@
-pragma solidity 0.5.15;
+pragma solidity 0.5.16;
 
 import {DSTest} from "ds-test/test.sol";
 import {DSToken} from "ds-token/token.sol";
@@ -132,7 +132,7 @@ contract ExchangeTest is DSTest, Math {
     // Integer square root (isqrt) satisfies:
     // isqrt(x) ^ 2 <= x < (isqrt(x) + 1) ^ 2
     // However, if y is equal to or larger than
-    // sqrt(2^256) = 
+    // sqrt(2^256) =
     // 340282366920938463463374607431768211455,
     // (y + 1) ** 2 will overflow
     function test_sqrt(uint x) public {
