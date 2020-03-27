@@ -1,0 +1,12 @@
+[submodule "ds-test"]
+	path = lib/ds-test
+	url = git@github.com:dapphub/ds-test.git
+[submodule "ds-token"]
+	path = lib/ds-token
+	url = git@github.com:dapphub/ds-token.git
+[submodule "uniswap-v2-periphery"]
+	path = uniswap-v2-periphery
+	url = git@github.com:dapp-org/uniswap-v2-periphery.git
+[submodule "uniswap-v2-core"]
+	path = uniswap-v2-core
+	url = git@github.com:dapp-org/uniswap-v2-core.git
