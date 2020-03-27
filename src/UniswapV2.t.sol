@@ -31,7 +31,7 @@ contract User {
     }
 
     function swap(uint amount0Out, uint amount1Out) public {
-      pair.swap(amount0Out, amount1Out, address(this), '0x');
+      pair.swap(amount0Out, amount1Out, address(this), '');
     }
 }
 
@@ -58,10 +58,12 @@ contract Test is DSTest, Math {
     User             user;
 
     function setUp() public {
-        token0  = new DSToken("TST-0");
-        token1  = new DSToken("TST-1");
+        DSToken tokenA = new DSToken("TST-0");
+        DSToken tokenB = new DSToken("TST-1");
         factory = new UniswapV2Factory(address(this));
-        pair    = UniswapV2Pair(factory.createPair(address(token0), address(token1)));
+        pair    = UniswapV2Pair(factory.createPair(address(tokenA), address(tokenB)));
+        token0  = DSToken(pair.token0());
+        token1  = DSToken(pair.token1());
         user    = new User(pair);
     }
 
@@ -87,8 +89,8 @@ contract Test is DSTest, Math {
         giftSome();
         addLiquidity(1000, 4000);
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
-        assertEq(uint(reserve0), 4000);
-        assertEq(uint(reserve1), 1000);
+        assertEq(uint(reserve0), 1000);
+        assertEq(uint(reserve1), 4000);
         assertEq(token0.balanceOf(address(pair)), 1000);
         assertEq(token1.balanceOf(address(pair)), 4000);
         assertEq(pair.balanceOf(address(user)), 1000);
@@ -170,8 +172,8 @@ contract Test is DSTest, Math {
         removeLiquidity(1000);
 
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
-        assertEq(uint(reserve0), 2000);
-        assertEq(uint(reserve1), 500);
+        assertEq(uint(reserve0), 500);
+        assertEq(uint(reserve1), 2000);
 
         assertEq(token0.balanceOf(address(pair)), 500);
         assertEq(token1.balanceOf(address(pair)), 2000);
@@ -185,19 +187,36 @@ contract Test is DSTest, Math {
         giftSome();
         addLiquidity(5 ether, 10 ether);
         user.push(token0, 1 ether);
-        user.swap(0, 1662497915624478906);
+        user.swap(0, 1.662497915624478906 ether);
+
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        assertEq(uint(reserve0), 6 ether);
+        assertEq(uint(reserve1), 10 ether - 1.662497915624478906 ether);
+
+        assertEq(token0.balanceOf(address(pair)), 6 ether);
+        assertEq(token1.balanceOf(address(pair)), 10 ether - 1.662497915624478906 ether);
+
         assertEq(token0.balanceOf(address(user)), 4 ether);
-        assertEq(token1.balanceOf(address(user)), 1662497915624478906);
+        assertEq(token1.balanceOf(address(user)), 1.662497915624478906 ether);
     }
 
     //token1 in -> token0 out
     function test_swap1() public {
         giftSome();
-        addLiquidity(10 ether, 5 ether);
+        addLiquidity(5 ether, 10 ether);
+        token1.mint(address(user), 1 ether);
         user.push(token1, 1 ether);
-        user.swap(0, 453305446940074565);
-        assertEq(token1.balanceOf(address(user)), 4 ether);
-        assertEq(token0.balanceOf(address(user)), 453305446940074565);
+        user.swap(0.045330544694007456 ether, 0);
+
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        assertEq(uint(reserve0), 5 ether - 0.045330544694007456 ether);
+        assertEq(uint(reserve1), 11 ether);
+
+        assertEq(token0.balanceOf(address(pair)), 5 ether - 0.045330544694007456 ether);
+        assertEq(token1.balanceOf(address(pair)), 11 ether);
+
+        assertEq(token0.balanceOf(address(user)), 5 ether + 0.045330544694007456 ether);
+        assertEq(token1.balanceOf(address(user)), 0);
     }
 }
 
