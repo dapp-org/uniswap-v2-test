@@ -2,36 +2,36 @@ pragma solidity 0.5.16;
 
 import {DSTest} from "ds-test/test.sol";
 import {DSToken} from "ds-token/token.sol";
-import {UniswapV2Exchange} from "contracts/UniswapV2Exchange.sol";
-import {UniswapV2Factory} from "contracts/UniswapV2Factory.sol";
+import {UniswapV2Pair} from "uniswap-v2-core/contracts/UniswapV2Pair.sol";
+import {UniswapV2Factory} from "uniswap-v2-core/contracts/UniswapV2Factory.sol";
 
-contract ExchangeUser {
-    UniswapV2Exchange exchange;
+contract User {
+    UniswapV2Pair pair;
 
-    constructor(UniswapV2Exchange _exchange) public {
-      exchange = _exchange;
+    constructor(UniswapV2Pair _pair) public {
+      pair = _pair;
     }
 
-    // Transfer trading tokens to the exchange
+    // Transfer trading tokens to the pair
     function push(DSToken token, uint amount) public {
-      token.push(address(exchange), amount);
+      token.push(address(pair), amount);
     }
 
-    // Transfer liquidity tokens to the exchange
+    // Transfer liquidity tokens to the pair
     function push(uint amount) public {
-      exchange.transfer(address(exchange), amount);
+      pair.transfer(address(pair), amount);
     }
 
     function mint() public {
-      exchange.mint(address(this));
+      pair.mint(address(this));
     }
 
     function burn() public {
-      exchange.burn(address(this));
+      pair.burn(address(this));
     }
 
-    function swap(DSToken tokenIn, uint amountOut) public {
-      exchange.swap(address(tokenIn), amountOut, address(this));
+    function swap(uint amount0Out, uint amount1Out) public {
+      pair.swap(amount0Out, amount1Out, address(this), '0x');
     }
 }
 
@@ -50,19 +50,19 @@ contract Math {
   }
 }
 
-contract ExchangeTest is DSTest, Math {
-    UniswapV2Exchange exchange;
-    UniswapV2Factory  factory;
-    DSToken           token0;
-    DSToken           token1;
-    ExchangeUser      user;
+contract Test is DSTest, Math {
+    UniswapV2Pair    pair;
+    UniswapV2Factory factory;
+    DSToken          token0;
+    DSToken          token1;
+    User             user;
 
     function setUp() public {
-        token0   = new DSToken("TST-0");
-        token1   = new DSToken("TST-1");
-        factory  = new UniswapV2Factory(address(this));
-        exchange = UniswapV2Exchange(factory.createExchange(address(token0), address(token1)));
-        user      = new ExchangeUser(exchange);
+        token0  = new DSToken("TST-0");
+        token1  = new DSToken("TST-1");
+        factory = new UniswapV2Factory(address(this));
+        pair    = UniswapV2Pair(factory.createPair(address(token0), address(token1)));
+        user    = new User(pair);
     }
 
     function giftSome() internal {
@@ -83,17 +83,17 @@ contract ExchangeTest is DSTest, Math {
         user.burn();
     }
 
-    function test_join() public {
+    function test_initial_join() public {
         giftSome();
-        addLiquidity(10, 40);
-        (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
-        assertEq(uint(reserve0), 40);
-        assertEq(uint(reserve1), 10);
-        assertEq(token0.balanceOf(address(exchange)), 10);
-        assertEq(token1.balanceOf(address(exchange)), 40);
-        assertEq(exchange.balanceOf(address(user)), 20);
-        assertEq(exchange.totalSupply(), 20);
-        assertEq(exchange.balanceOf(address(exchange)), 0);
+        addLiquidity(1000, 4000);
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        assertEq(uint(reserve0), 4000);
+        assertEq(uint(reserve1), 1000);
+        assertEq(token0.balanceOf(address(pair)), 1000);
+        assertEq(token1.balanceOf(address(pair)), 4000);
+        assertEq(pair.balanceOf(address(user)), 1000);
+        assertEq(pair.totalSupply(), 2000);
+        assertEq(pair.balanceOf(address(pair)), 0);
     }
 
     // the totalSupply should be the geometric mean of the reserves, usually expressed as
@@ -101,15 +101,15 @@ contract ExchangeTest is DSTest, Math {
     // be approximated by the integer square root, so we actually check:
     // totalSupply ^ 2  <= x * y < (totalSupply + 1) ^ 2
     function assert_k_invariant_strict() public {
-      (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
-      uint totalSupply = exchange.totalSupply();
+      (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+      uint totalSupply = pair.totalSupply();
       assertTrue(totalSupply * totalSupply <= uint(reserve0) * uint(reserve1));
       assertTrue((totalSupply + 1) ** 2 > uint(reserve0) * uint(reserve1));
     }
 
     function assert_k_at_least() public {
-      (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
-      uint totalSupply = exchange.totalSupply();
+      (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+      uint totalSupply = pair.totalSupply();
       assertTrue(totalSupply * totalSupply <= uint(reserve0) * uint(reserve1));
     }
 
@@ -118,7 +118,7 @@ contract ExchangeTest is DSTest, Math {
     // in order to get relatively reasonable arguments and not get stuck in a bunch
     // of math overflow, let's start with some modestly sized numbers
     function test_join_abstract(uint64 fstA, uint64 fstB, uint64 sndA, uint64 sndB) public {
-      assertEq(exchange.totalSupply(), 0);
+      assertEq(pair.totalSupply(), 0);
       token0.mint(address(user), uint(fstA) + uint(sndA));
       token1.mint(address(user), uint(fstB) + uint(sndB));
       addLiquidity(fstA, fstB);
@@ -165,37 +165,37 @@ contract ExchangeTest is DSTest, Math {
 
     function test_exit() public {
         giftSome();
-        addLiquidity(10, 40);
-        assertEq(exchange.balanceOf(address(user)), 20);
-        removeLiquidity(20);
+        addLiquidity(1000, 4000);
+        assertEq(pair.balanceOf(address(user)), 1000);
+        removeLiquidity(1000);
 
-        (uint112 reserve0, uint112 reserve1,) = exchange.getReserves();
-        assertEq(uint(reserve0), 0);
-        assertEq(uint(reserve1), 0);
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        assertEq(uint(reserve0), 2000);
+        assertEq(uint(reserve1), 500);
 
-        assertEq(token0.balanceOf(address(exchange)), 0);
-        assertEq(token1.balanceOf(address(exchange)), 0);
-        assertEq(exchange.balanceOf(address(user)), 0);
-        assertEq(exchange.totalSupply(), 0);
-        assertEq(exchange.balanceOf(address(exchange)), 0);
+        assertEq(token0.balanceOf(address(pair)), 500);
+        assertEq(token1.balanceOf(address(pair)), 2000);
+        assertEq(pair.balanceOf(address(user)), 0);
+        assertEq(pair.totalSupply(), 1000);
+        assertEq(pair.balanceOf(address(pair)), 0);
     }
 
-    // token0 in -> token1 out
+    //token0 in -> token1 out
     function test_swap0() public {
         giftSome();
         addLiquidity(5 ether, 10 ether);
         user.push(token0, 1 ether);
-        user.swap(token0, 1662497915624478906);
+        user.swap(0, 1662497915624478906);
         assertEq(token0.balanceOf(address(user)), 4 ether);
         assertEq(token1.balanceOf(address(user)), 1662497915624478906);
     }
 
-    // token1 in -> token0 out
+    //token1 in -> token0 out
     function test_swap1() public {
         giftSome();
         addLiquidity(10 ether, 5 ether);
         user.push(token1, 1 ether);
-        user.swap(token1, 453305446940074565);
+        user.swap(0, 453305446940074565);
         assertEq(token1.balanceOf(address(user)), 4 ether);
         assertEq(token0.balanceOf(address(user)), 453305446940074565);
     }

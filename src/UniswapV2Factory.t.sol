@@ -1,8 +1,8 @@
 pragma solidity 0.5.16;
 
 import {DSTest} from "ds-test/test.sol";
-import {UniswapV2Exchange} from "contracts/UniswapV2Exchange.sol";
-import {UniswapV2Factory} from "contracts/UniswapV2Factory.sol";
+import {UniswapV2Pair} from "uniswap-v2-core/contracts/UniswapV2Pair.sol";
+import {UniswapV2Factory} from "uniswap-v2-core/contracts/UniswapV2Factory.sol";
 
 contract FactoryOwner {
     function setFeeOwner(UniswapV2Factory factory, address owner) public {
@@ -51,7 +51,7 @@ contract Admin is FactoryTest {
     }
 }
 
-contract ExchangeFactory is FactoryTest {
+contract PairFactory is FactoryTest {
     address tokenA = address(0x1);
     address tokenB = address(0x2);
     address tokenC = address(0x3);
@@ -59,50 +59,50 @@ contract ExchangeFactory is FactoryTest {
 
     function create2address(address token0, address token1) internal view returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-        bytes32 init = keccak256(type(UniswapV2Exchange).creationCode);
+        bytes32 init = keccak256(type(UniswapV2Pair).creationCode);
         bytes32 hash = keccak256(abi.encodePacked(hex"ff", factory, salt, init));
         return address(uint160(uint256(hash)));
     }
 
-    function test_create_exchange_0() public {
-        address exchange = factory.createExchange(tokenA, tokenB);
-        assertEq(exchange, create2address(tokenA, tokenB));
+    function test_create_pair_0() public {
+        address pair = factory.createPair(tokenA, tokenB);
+        assertEq(pair, create2address(tokenA, tokenB));
     }
 
-    function test_create_exchange_1() public {
-        address exchange = factory.createExchange(tokenC, tokenD);
-        assertEq(exchange, create2address(tokenC, tokenD));
+    function test_create_pair_1() public {
+        address pair = factory.createPair(tokenC, tokenD);
+        assertEq(pair, create2address(tokenC, tokenD));
     }
 
-    function test_create_exchange_1_sort() public {
-      address exchange = factory.createExchange(tokenD, tokenC);
-      assertEq(exchange, create2address(tokenC, tokenD));
+    function test_create_pair_1_sort() public {
+      address pair = factory.createPair(tokenD, tokenC);
+      assertEq(pair, create2address(tokenC, tokenD));
     }
 
-    function testFail_create_exchange_same_address() public {
-        factory.createExchange(tokenA, tokenA);
+    function testFail_create_pair_same_address() public {
+        factory.createPair(tokenA, tokenA);
     }
 
-    function testFail_create_exchange_zero_address() public {
-        factory.createExchange(tokenA, address(0));
+    function testFail_create_pair_zero_address() public {
+        factory.createPair(tokenA, address(0));
     }
 
-    function testFail_create_existing_exchange() public {
-        factory.createExchange(tokenA, tokenB);
-        factory.createExchange(tokenB, tokenA);
+    function testFail_create_existing_pair() public {
+        factory.createPair(tokenA, tokenB);
+        factory.createPair(tokenB, tokenA);
     }
 
-    function test_exchanges_count() public {
-        factory.createExchange(tokenA, tokenB);
-        factory.createExchange(tokenC, tokenD);
-        factory.createExchange(tokenA, tokenC);
-        factory.createExchange(tokenB, tokenD);
-        assertEq(factory.allExchangesLength(), 4);
+    function test_pairs_count() public {
+        factory.createPair(tokenA, tokenB);
+        factory.createPair(tokenC, tokenD);
+        factory.createPair(tokenA, tokenC);
+        factory.createPair(tokenB, tokenD);
+        assertEq(factory.allPairsLength(), 4);
     }
 
-    function test_find_exchange_by_token_address() public {
-        address exchange = factory.createExchange(tokenA, tokenB);
-        assertEq(factory.getExchange(tokenA, tokenB), exchange);
-        assertEq(factory.getExchange(tokenB, tokenA), exchange);
+    function test_find_pair_by_token_address() public {
+        address pair = factory.createPair(tokenA, tokenB);
+        assertEq(factory.getPair(tokenA, tokenB), pair);
+        assertEq(factory.getPair(tokenB, tokenA), pair);
     }
 }
