@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+DAPP_TEST_ADDRESS=0xe73e800882b6EC0Cde30799be4aB1d941fF1A125 \
+dapp --use solc:0.5.16 test -v
