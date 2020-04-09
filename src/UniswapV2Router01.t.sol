@@ -46,9 +46,16 @@ contract User {
         router.removeLiquidityETH(address(token), liquidity, 0, 0, address(this), uint(-1));
     }
 
+    function swap_exact_in(uint amountIn) public {
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(pair0.token1()); tokens[1] = address(pair0.token0());
+        router.swapExactTokensForTokens(amountIn, 0, tokens, address(this), uint(-1));
+    }
 
-    function swap_exact_0(uint amountIn, uint amountOutMin, address[] memory path) public {
-        router.swapExactTokensForTokens(amountIn, amountOutMin, path, address(this), uint(-1));
+    function swap_exact_out(uint amountOut) public {
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(pair0.token0()); tokens[1] = address(pair0.token1());
+        router.swapTokensForExactTokens(amountOut, uint(-1), tokens, address(this), uint(-1));
     }
 }
 
@@ -108,7 +115,7 @@ contract RouterTest is DSTest, DSMath {
     }
 
     // Sanity check
-    function test_pairs() public {
+    function test_pair_getters() public {
         assertEq(address(user.pair0()), factory.getPair(address(tokenA), address(tokenB)));
         assertEq(address(user.pair1()), factory.getPair(address(tokenA), address(weth)));
     }
@@ -151,7 +158,7 @@ contract RouterTest is DSTest, DSMath {
         assertEqApprox(
           tokenA.balanceOf(address(pair)) * tokenB.balanceOf(address(pair)),
           pair.MINIMUM_LIQUIDITY() ** 2,
-          0.05 ether // 0.05% error margin
+          0.06 ether // 0.06% error margin
         );
         // User balances are no less than starting balances less locked liquidity
         assertTrue(
@@ -206,7 +213,7 @@ contract RouterTest is DSTest, DSMath {
         assertEqApprox(
           tokenA.balanceOf(address(pair)) * weth.balanceOf(address(pair)),
           pair.MINIMUM_LIQUIDITY() ** 2,
-          0.05 ether // 0.05% error margin
+          0.06 ether // 0.06% error margin
         );
         // User balances are no less than starting balances less locked liquidity
         assertTrue(
@@ -222,4 +229,77 @@ contract RouterTest is DSTest, DSMath {
         assert_k(pair);
     }
 
+    // Fund the user and add liquidity
+    function setupSwap(uint amt) public {
+        giftSome(amt * 4);
+        user.join(address(tokenA), address(tokenB), amt, amt / 3);
+        user.join(address(tokenA), address(tokenB), amt, amt / 3);
+    }
+
+    // Swap: A for B
+    // Send exact tokenA
+    // Receive proportional tokenB
+    function test_swap_exact_in(uint64 amountIn) public {
+        UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenA), address(tokenB)));
+        setupSwap(amountIn);
+
+        // Pre-swap balances
+        uint prebalA = tokenA.balanceOf(address(user));
+        uint prebalB = tokenB.balanceOf(address(user));
+        (uint112 preReserve0, uint112 preReserve1,) = pair.getReserves();
+
+        // Calculate expected amount out
+        uint expectedOut = wmul(
+          wdiv(amountIn, (amountIn + uint(preReserve1))),
+          uint(preReserve0)
+        );
+
+        user.swap_exact_in(amountIn);
+
+        // Post-swap balances
+        (uint112 postReserve0, uint112 postReserve1,) = pair.getReserves();
+        uint postbalA = tokenA.balanceOf(address(user));
+        uint postbalB = tokenB.balanceOf(address(user));
+
+        // Check changed user balances == change in reserves
+        assertEq(prebalA  - postbalA, uint(postReserve1) - uint(preReserve1));
+        assertEq(postbalB - prebalB,  uint(preReserve0)  - uint(postReserve0));
+
+        // Check amount received == expected out less the 0.003% fee.
+        assertTrue(expectedOut > postbalB - prebalB);
+        assertEqApprox(postbalB - prebalB, expectedOut, 0.003 ether);
+    }
+
+    // Swap: A for B
+    // Send proportional tokenA
+    // Receive exact tokenB
+    function test_swap_exact_out(uint64 amountOut) public {
+        UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenA), address(tokenB)));
+        setupSwap(amountOut);
+
+        // Pre-swap balances
+        uint prebalA = tokenA.balanceOf(address(user));
+        uint prebalB = tokenB.balanceOf(address(user));
+        (uint112 preReserve0, uint112 preReserve1,) = pair.getReserves();
+
+        user.swap_exact_out(amountOut);
+
+        // Post-swap balances
+        (uint112 postReserve0, uint112 postReserve1,) = pair.getReserves();
+        uint postbalA = tokenA.balanceOf(address(user));
+        uint postbalB = tokenB.balanceOf(address(user));
+
+        uint expectedIn = wmul(
+          wdiv(amountOut, uint(preReserve1)),
+          uint(postReserve0)
+        );
+
+        // Check changed user balances == change in reserves
+        assertEq(prebalA  - postbalA, uint(postReserve1) - uint(preReserve1));
+        assertEq(postbalB - prebalB,  uint(preReserve0)  - uint(postReserve0));
+
+        // Check amount sent == expectedIn plus error margin.
+        assertTrue(expectedIn < prebalB - postbalB);
+        assertEqApprox(prebalB - postbalB, expectedIn, 0.0016 ether);
+    }
 }
