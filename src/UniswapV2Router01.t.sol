@@ -46,16 +46,28 @@ contract User {
         router.removeLiquidityETH(address(token), liquidity, 0, 0, address(this), uint(-1));
     }
 
-    function swap_exact_in(uint amountIn) public {
+    function sellTokens(uint qty, DSToken A, DSToken B) public {
         address[] memory tokens = new address[](2);
-        tokens[0] = address(pair0.token1()); tokens[1] = address(pair0.token0());
-        router.swapExactTokensForTokens(amountIn, 0, tokens, address(this), uint(-1));
+        tokens[0] = address(A); tokens[1] = address(B);
+        router.swapExactTokensForTokens(qty, 0, tokens, address(this), uint(-1));
     }
 
-    function swap_exact_out(uint amountOut) public {
+    function buyTokens(uint qty, DSToken A, DSToken B) public {
         address[] memory tokens = new address[](2);
-        tokens[0] = address(pair0.token0()); tokens[1] = address(pair0.token1());
-        router.swapTokensForExactTokens(amountOut, uint(-1), tokens, address(this), uint(-1));
+        tokens[0] = address(A); tokens[1] = address(B);
+        router.swapTokensForExactTokens(qty, uint(-1), tokens, address(this), uint(-1));
+    }
+
+    function sellETH(uint amountETH) public {
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(pair1.token0()); tokens[1] = address(pair1.token1());
+        router.swapExactETHForTokens.value(amountETH)(0, tokens, address(this), uint(-1));
+    }
+
+    function buyETH(uint amountETH) public {
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(pair1.token1()); tokens[1] = address(pair1.token0());
+        router.swapTokensForExactETH(amountETH, uint(-1), tokens, address(this), uint(-1));
     }
 }
 
@@ -121,7 +133,7 @@ contract RouterTest is DSTest, DSMath {
     }
 
     // Join with tokens
-    function test_add_remove_liquidity(uint64 amountA, uint64 amountB, uint64 amountA2, uint64 amountB2) public {
+    function test_add_remove_liquidity(uint32 amountA, uint32 amountB, uint32 amountA2, uint32 amountB2) public {
         UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenA), address(tokenB)));
         uint fromBalance   = 100 ether; giftSome(fromBalance);
 
@@ -146,28 +158,38 @@ contract RouterTest is DSTest, DSMath {
         user.exit(address(tokenA), address(tokenB), liquidity);
 
         // Check liquidity balances
-        assertEq(pair.totalSupply(), pair.MINIMUM_LIQUIDITY());
         assertEq(pair.balanceOf(address(user)), 0);
+        assertEq(pair.totalSupply(), pair.MINIMUM_LIQUIDITY());
+        assertEq(pair.totalSupply(), pair.balanceOf(address(0)));
 
         // Check token balances
-        // Tokens remaining at the exchange are no less than locked liquidity
+        //
+        // The error margin on the exchange balances appears greater because
+        // the amount of locked liquidity is relatively small in comparison to
+        // the amounts being deposited and widthdrawn.
+        //
+        // Tokens remaining at the exchange are slightly in excess of the
+        // equivalent recorded liquidity balance.
         assertTrue(
           tokenA.balanceOf(address(pair)) * tokenB.balanceOf(address(pair))
-          > pair.MINIMUM_LIQUIDITY() ** 2
+          > pair.totalSupply() ** 2
         );
+        // Note that this error margin is proportional to the size of amounts
+        // being deposited and withdrawn.
         assertEqApprox(
           tokenA.balanceOf(address(pair)) * tokenB.balanceOf(address(pair)),
-          pair.MINIMUM_LIQUIDITY() ** 2,
+          pair.totalSupply() ** 2,
           0.06 ether // 0.06% error margin
         );
-        // User balances are no less than starting balances less locked liquidity
+        // Final user balances ~= starting balances less the intial locked
+        // liquidity burned by the exhange.
         assertTrue(
           tokenA.balanceOf(address(user)) + tokenB.balanceOf(address(user))
-          > (fromBalance * 2) - (pair.MINIMUM_LIQUIDITY() ** 2)
+          > (fromBalance * 2) - (pair.totalSupply() ** 2)
         );
         assertEqApprox(
           tokenA.balanceOf(address(user)) + tokenB.balanceOf(address(user)),
-          (fromBalance * 2) - (pair.MINIMUM_LIQUIDITY() ** 2),
+          (fromBalance * 2) - (pair.totalSupply() ** 2),
           0.000000000000005 ether // % error margin
         );
 
@@ -200,29 +222,37 @@ contract RouterTest is DSTest, DSMath {
         // Remove all liquidiy
         user.exitETH(address(tokenA), liquidity);
 
-        // Check liquidity
-        assertEq(pair.totalSupply(), pair.MINIMUM_LIQUIDITY());
+        // Check liquidity balances
         assertEq(pair.balanceOf(address(user)), 0);
+        assertEq(pair.totalSupply(), pair.MINIMUM_LIQUIDITY());
+        assertEq(pair.totalSupply(), pair.balanceOf(address(0)));
 
         // Check token balances
-        // Tokens remaining at the exchange are no less than locked liquidity
+        //
+        // The error margin on the exchange balances appears greater because
+        // the amount of locked liquidity is relatively small in comparison to
+        // the amounts being deposited and widthdrawn.
+        //
+        // Tokens remaining at the exchange are slightly in excess of the
+        // equivalent recorded liquidity balance.
         assertTrue(
           tokenA.balanceOf(address(pair)) * weth.balanceOf(address(pair))
-          > pair.MINIMUM_LIQUIDITY() ** 2
+          > pair.totalSupply() ** 2
         );
         assertEqApprox(
           tokenA.balanceOf(address(pair)) * weth.balanceOf(address(pair)),
-          pair.MINIMUM_LIQUIDITY() ** 2,
+          pair.totalSupply() ** 2,
           0.06 ether // 0.06% error margin
         );
-        // User balances are no less than starting balances less locked liquidity
+        // Final user balances ~= starting balances less the intial locked
+        // liquidity burned by the exhange.
         assertTrue(
           tokenA.balanceOf(address(user)) + address(user).balance
-          > (fromBalance * 2) - (pair.MINIMUM_LIQUIDITY() ** 2)
+          > (fromBalance * 2) - (pair.totalSupply() ** 2)
         );
         assertEqApprox(
           tokenA.balanceOf(address(user)) + address(user).balance,
-          (fromBalance * 2) - (pair.MINIMUM_LIQUIDITY() ** 2),
+          (fromBalance * 2) - (pair.totalSupply() ** 2),
           0.000000000000005 ether // error margin
         );
 
@@ -236,12 +266,16 @@ contract RouterTest is DSTest, DSMath {
         user.join(address(tokenA), address(tokenB), amt, amt / 3);
     }
 
-    // Swap: A for B
-    // Send exact tokenA
-    // Receive proportional tokenB
-    function test_swap_exact_in(uint64 amountIn) public {
+    function setupSwapETH(uint amt) public {
+        giftSome(amt * 4);
+        user.joinETH(address(tokenA), amt, amt / 3);
+        user.joinETH(address(tokenA), amt, amt / 3);
+    }
+
+    // Swap: exact A for B
+    function test_swap_exact_A(uint64 amountA) public {
         UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenA), address(tokenB)));
-        setupSwap(amountIn);
+        setupSwap(amountA);
 
         // Pre-swap balances
         uint prebalA = tokenA.balanceOf(address(user));
@@ -250,11 +284,11 @@ contract RouterTest is DSTest, DSMath {
 
         // Calculate expected amount out
         uint expectedOut = wmul(
-          wdiv(amountIn, (amountIn + uint(preReserve1))),
+          wdiv(amountA, (amountA + uint(preReserve1))),
           uint(preReserve0)
         );
 
-        user.swap_exact_in(amountIn);
+        user.sellTokens(amountA, tokenA, tokenB);
 
         // Post-swap balances
         (uint112 postReserve0, uint112 postReserve1,) = pair.getReserves();
@@ -270,27 +304,26 @@ contract RouterTest is DSTest, DSMath {
         assertEqApprox(postbalB - prebalB, expectedOut, 0.003 ether);
     }
 
-    // Swap: A for B
-    // Send proportional tokenA
-    // Receive exact tokenB
-    function test_swap_exact_out(uint64 amountOut) public {
+    // Swap: A for exact B
+    function test_swap_exact_B(uint64 amountB) public {
         UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenA), address(tokenB)));
-        setupSwap(amountOut);
+        setupSwap(amountB);
 
         // Pre-swap balances
         uint prebalA = tokenA.balanceOf(address(user));
         uint prebalB = tokenB.balanceOf(address(user));
         (uint112 preReserve0, uint112 preReserve1,) = pair.getReserves();
 
-        user.swap_exact_out(amountOut);
+        user.buyTokens(amountB, tokenB, tokenA);
 
         // Post-swap balances
         (uint112 postReserve0, uint112 postReserve1,) = pair.getReserves();
         uint postbalA = tokenA.balanceOf(address(user));
         uint postbalB = tokenB.balanceOf(address(user));
 
+        // Calculate expected amount in
         uint expectedIn = wmul(
-          wdiv(amountOut, uint(preReserve1)),
+          wdiv(amountB, uint(preReserve1)),
           uint(postReserve0)
         );
 
@@ -302,4 +335,37 @@ contract RouterTest is DSTest, DSMath {
         assertTrue(expectedIn < prebalB - postbalB);
         assertEqApprox(prebalB - postbalB, expectedIn, 0.0016 ether);
     }
+
+    // Swap: exact ETH for A
+    function test_swap_send_exact_ETH(uint64 amountETH) public {
+        UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenA), address(weth)));
+        setupSwapETH(amountETH);
+
+        // Pre-swap balances
+        uint prebalA = tokenA.balanceOf(address(user));
+        uint prebalE = address(user).balance;
+        (uint112 preReserve0, uint112 preReserve1,) = pair.getReserves();
+
+        // Calculate expected amount out
+        uint expectedOut = wmul(
+          wdiv(amountETH, (amountETH + uint(preReserve0))),
+          uint(preReserve1)
+        );
+
+        user.sellETH(amountETH);
+
+        // Post-swap balances
+        (uint112 postReserve0, uint112 postReserve1,) = pair.getReserves();
+        uint postbalA = tokenA.balanceOf(address(user));
+        uint postbalE = address(user).balance;
+
+        // Check changed user balances == change in reserves
+        assertEq(prebalA  - postbalA, uint(postReserve1) - uint(preReserve1));
+        assertEq(postbalE - prebalE,  uint(preReserve0)  - uint(postReserve0));
+
+        // Check amount received == expected out less the 0.003% fee.
+        assertTrue(expectedOut > postbalA - prebalA);
+        assertEqApprox(postbalA - prebalA, expectedOut, 0.003 ether);
+    }
+
 }
