@@ -12,6 +12,8 @@ contract User {
       pair = _pair;
     }
 
+    function() payable external {}
+
     // Transfer trading tokens to the pair
     function push(DSToken token, uint amount) public {
       token.push(address(pair), amount);
@@ -30,9 +32,28 @@ contract User {
       pair.burn(address(this));
     }
 
-    function swap(uint amount0Out, uint amount1Out) public {
-      pair.swap(amount0Out, amount1Out, address(this), '');
+    function swap(uint amount0Out, uint amount1Out, address to, bytes memory data) public {
+      pair.swap(amount0Out, amount1Out, to, data);
     }
+
+}
+
+contract Callee0 {
+
+    function uniswapV2Call(address sender, uint amount0, uint amount1, bytes calldata data) external {
+      UniswapV2Pair pair = UniswapV2Pair(msg.sender);
+      address token0 = pair.token0();
+      DSToken(token0).push(address(pair), 1 ether);
+    }
+
+}
+
+contract Callee1 {
+
+    function uniswapV2Call(address sender, uint amount0, uint amount1, bytes calldata data) external {
+      UniswapV2Pair(msg.sender).swap(amount0, amount1, address(this), '');
+    }
+
 }
 
 contract Math {
@@ -50,12 +71,14 @@ contract Math {
   }
 }
 
-contract Test is DSTest, Math {
+contract PairTest is DSTest, Math {
     UniswapV2Pair    pair;
     UniswapV2Factory factory;
     DSToken          token0;
     DSToken          token1;
     User             user;
+    Callee0          callee0;
+    Callee1          callee1;
 
     function setUp() public {
         DSToken tokenA = new DSToken("TST-0");
@@ -65,11 +88,15 @@ contract Test is DSTest, Math {
         token0  = DSToken(pair.token0());
         token1  = DSToken(pair.token1());
         user    = new User(pair);
+        callee0 = new Callee0();
+        callee1 = new Callee1();
     }
 
     function giftSome() internal {
         token0.mint(address(user), 10 ether);
         token1.mint(address(user), 10 ether);
+        token0.mint(address(callee0), 10 ether);
+        token0.mint(address(callee1), 10 ether);
     }
 
     // Transfer trading tokens and join
@@ -164,7 +191,6 @@ contract Test is DSTest, Math {
       test_sqrt(1);
     }
 
-
     function test_exit() public {
         giftSome();
         addLiquidity(1000, 4000);
@@ -182,12 +208,17 @@ contract Test is DSTest, Math {
         assertEq(pair.balanceOf(address(pair)), 0);
     }
 
-    //token0 in -> token1 out
-    function test_swap0() public {
+    function setupSwap() public {
         giftSome();
         addLiquidity(5 ether, 10 ether);
+    }
+
+
+    //token0 in -> token1 out
+    function test_swap0() public {
+        setupSwap();
         user.push(token0, 1 ether);
-        user.swap(0, 1.662497915624478906 ether);
+        user.swap(0, 1.662497915624478906 ether, address(user), '');
 
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
         assertEq(uint(reserve0), 6 ether);
@@ -202,11 +233,10 @@ contract Test is DSTest, Math {
 
     //token1 in -> token0 out
     function test_swap1() public {
-        giftSome();
-        addLiquidity(5 ether, 10 ether);
+        setupSwap();
         token1.mint(address(user), 1 ether);
         user.push(token1, 1 ether);
-        user.swap(0.045330544694007456 ether, 0);
+        user.swap(0.045330544694007456 ether, 0, address(user), '');
 
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
         assertEq(uint(reserve0), 5 ether - 0.045330544694007456 ether);
@@ -217,6 +247,16 @@ contract Test is DSTest, Math {
 
         assertEq(token0.balanceOf(address(user)), 5 ether + 0.045330544694007456 ether);
         assertEq(token1.balanceOf(address(user)), 0);
+    }
+
+    function test_optimistic_swap() public {
+        setupSwap();
+        user.swap(0, 1.662497915624478906 ether, address(callee0), '???');
+    }
+
+    function testFail_reentrant_optimistic_swap() public {
+        setupSwap();
+        user.swap(0, 1.662497915624478906 ether, address(callee1), '???');
     }
 }
 
