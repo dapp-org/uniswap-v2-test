@@ -106,6 +106,7 @@ contract RouterTest is DSTest, DSMath {
     function giftSome(uint amount) public {
         tokenA.mint(address(user), amount);
         tokenB.mint(address(user), amount);
+        tokenC.mint(address(user), amount);
         address(user).transfer(amount);
     }
 
@@ -276,6 +277,7 @@ contract RouterTest is DSTest, DSMath {
         giftSome(amt * 4);
         user.join(address(tokenA), address(tokenB), amt, amt / 3);
         user.join(address(tokenA), address(tokenB), amt, amt / 3);
+        user.join(address(tokenA), address(tokenC), amt, amt / 3);
     }
 
     function setupSwapETH(uint amt) public {
@@ -381,28 +383,12 @@ contract RouterTest is DSTest, DSMath {
     }
 
     // Swap: exact C for A
-    function test_swap_with_feeToken(uint64 amountA) public {
+    function test_swap_with_feeToken() public {
+        uint amountA = 1000000000000;
+
         UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenC), address(tokenA)));
         setupSwap(amountA);
 
-        // Pre-swap balances
-        uint prebalA = tokenA.balanceOf(address(user));
-        uint prebalB = tokenC.balanceOf(address(user));
-        (uint112 preReserve0, uint112 preReserve1,) = pair.getReserves();
-
-        // Calculate expected amount out
-        uint expectedOut = wmul(
-          wdiv(amountA, (amountA + uint(preReserve1))),
-          uint(preReserve0)
-        );
-
-        user.sellFeeTokens(amountA, tokenC, tokenA);
-        /* // Check changed user balances == change in reserves */
-        /* assertEq(prebalA  - postbalA, uint(postReserve1) - uint(preReserve1)); */
-        /* assertEq(postbalB - prebalB,  uint(preReserve0)  - uint(postReserve0)); */
-
-        /* // Check amount received == expected out less the 0.003% fee. */
-        /* assertTrue(expectedOut > postbalB - prebalB); */
-        /* assertEqApprox(postbalB - prebalB, expectedOut, 0.003 ether); */
+        user.sellFeeTokens(amountA / 2, tokenC, tokenA);
     }
 }
