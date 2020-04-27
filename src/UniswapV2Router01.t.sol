@@ -7,11 +7,13 @@ import {UniswapV2Factory} from "uniswap-v2-core/contracts/UniswapV2Factory.sol";
 import {UniswapV2Pair} from "uniswap-v2-core/contracts/UniswapV2Pair.sol";
 import {UniswapV2Router01} from "uniswap-v2-periphery/contracts/UniswapV2Router01.sol";
 import {WETH9} from "uniswap-v2-periphery/contracts/test/WETH9.sol";
+import {FeeToken} from "./FeeToken.sol";
 
 contract User {
     UniswapV2Router01 router;
     UniswapV2Pair public pair0; // tokenA, tokenB
     UniswapV2Pair public pair1; // tokenA, weth
+    UniswapV2Pair public pair2; // tokenA, tokenC
 
     constructor(UniswapV2Router01 _router) public {
         router = _router;
@@ -19,15 +21,17 @@ contract User {
 
     function() payable external {}
 
-    function init(DSToken tokenA, DSToken tokenB, WETH9 weth) public {
+    function init(DSToken tokenA, DSToken tokenB, FeeToken tokenC, WETH9 weth) public {
         pair0 = UniswapV2Pair(router.factory().createPair(address(tokenA), address(tokenB)));
         pair1 = UniswapV2Pair(router.factory().createPair(address(tokenA), address(weth)));
+        pair2 = UniswapV2Pair(router.factory().createPair(address(tokenA), address(tokenC)));
 
         pair0.approve(address(router), uint(-1));
         pair1.approve(address(router), uint(-1));
 
         tokenA.approve(address(router));
         tokenB.approve(address(router));
+        tokenC.approve(address(router));
     }
 
     function join(address tokenA, address tokenB, uint amountA, uint amountB) public {
@@ -47,6 +51,12 @@ contract User {
     }
 
     function sellTokens(uint qty, DSToken A, DSToken B) public {
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(A); tokens[1] = address(B);
+        router.swapExactTokensForTokens(qty, 0, tokens, address(this), uint(-1));
+    }
+
+    function sellFeeTokens(uint qty, FeeToken A, DSToken B) public {
         address[] memory tokens = new address[](2);
         tokens[0] = address(A); tokens[1] = address(B);
         router.swapExactTokensForTokens(qty, 0, tokens, address(this), uint(-1));
@@ -76,6 +86,7 @@ contract RouterTest is DSTest, DSMath {
     WETH9             weth;
     DSToken           tokenA;
     DSToken           tokenB;
+    FeeToken          tokenC;
     UniswapV2Router01 router;
     User              user;
 
@@ -84,6 +95,7 @@ contract RouterTest is DSTest, DSMath {
         weth    = new WETH9();
         tokenA  = new DSToken("TST-A");
         tokenB  = new DSToken("TST-B");
+        tokenC  = new FeeToken("TST-C");
         router  = new UniswapV2Router01(address(weth));
         user    = new User(router);
 
@@ -94,13 +106,15 @@ contract RouterTest is DSTest, DSMath {
         bytes32 hash = keccak256(type(UniswapV2Pair).creationCode);
         assertEq(hash, hex'cb3743dcdfb75e8762e37a1ee92fe64f0539c60e171d3796f13503c095b8c52f');
 
-        user.init(tokenA, tokenB, weth);
+        user.init(tokenA, tokenB, tokenC, weth);
+
     }
 
     // Fund the user
     function giftSome(uint amount) public {
         tokenA.mint(address(user), amount);
         tokenB.mint(address(user), amount);
+        tokenC.mint(address(user), amount);
         address(user).transfer(amount);
     }
 
@@ -120,6 +134,17 @@ contract RouterTest is DSTest, DSMath {
     function assertEqApprox(uint x, uint y, uint error_magnitude) internal {
         if (x >= y) { return assertTrue(wdiv(x, y) - WAD < error_magnitude); }
         else        { return assertTrue(wdiv(y, x) - WAD < error_magnitude); }
+    }
+
+    // Sanity check - ensure DAPP_TEST_ADDRESS is uniswap deployer
+    function test_factory_address() public {
+        assertEq(address(factory), address(router.factory()));
+    }
+
+    // Sanity check - should match the hard coded value from UniswapV2Library.pairFor
+    function test_factory_codehash() public {
+        bytes32 hash = keccak256(type(UniswapV2Pair).creationCode);
+        assertEq(hash, hex'cb3743dcdfb75e8762e37a1ee92fe64f0539c60e171d3796f13503c095b8c52f');
     }
 
     // Sanity check
@@ -260,6 +285,7 @@ contract RouterTest is DSTest, DSMath {
         giftSome(amt * 4);
         user.join(address(tokenA), address(tokenB), amt, amt / 3);
         user.join(address(tokenA), address(tokenB), amt, amt / 3);
+        user.join(address(tokenA), address(tokenC), amt, amt / 3);
     }
 
     function setupSwapETH(uint amt) public {
@@ -364,4 +390,15 @@ contract RouterTest is DSTest, DSMath {
         assertEqApprox(postbalA - prebalA, expectedOut, 0.003 ether);
     }
 
+    // Swap: exact C for A
+    // Currently fails as the amount forwarded by the router
+    // is less than what is sent due to transfer fees.
+    function test_swap_with_feeToken() public {
+        uint amountA = 1000000000000;
+
+        UniswapV2Pair pair = UniswapV2Pair(factory.getPair(address(tokenC), address(tokenA)));
+        setupSwap(amountA);
+
+        user.sellFeeTokens(amountA / 2, tokenC, tokenA);
+    }
 }
