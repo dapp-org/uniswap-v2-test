@@ -87,6 +87,13 @@ contract RouterTest is DSTest, DSMath {
         router  = new UniswapV2Router01(address(weth));
         user    = new User(router);
 
+        // Sanity check - ensure DAPP_TEST_ADDRESS is uniswap deployer
+        assertEq(address(factory), address(router.factory()));
+
+        // Sanity check - should match the hard coded value from UniswapV2Library.pairFor
+        bytes32 hash = keccak256(type(UniswapV2Pair).creationCode);
+        assertEq(hash, hex'cb3743dcdfb75e8762e37a1ee92fe64f0539c60e171d3796f13503c095b8c52f');
+
         user.init(tokenA, tokenB, weth);
     }
 
@@ -113,17 +120,6 @@ contract RouterTest is DSTest, DSMath {
     function assertEqApprox(uint x, uint y, uint error_magnitude) internal {
         if (x >= y) { return assertTrue(wdiv(x, y) - WAD < error_magnitude); }
         else        { return assertTrue(wdiv(y, x) - WAD < error_magnitude); }
-    }
-
-    // Sanity check - ensure DAPP_TEST_ADDRESS is uniswap deployer
-    function test_factory_address() public {
-        assertEq(address(factory), address(router.factory()));
-    }
-
-    // Sanity check - should match the hard coded value from UniswapV2Library.pairFor
-    function test_factory_codehash() public {
-        bytes32 hash = keccak256(type(UniswapV2Pair).creationCode);
-        assertEq(hash, hex'9a7290cf45ada5f545b2a5fd34506a296fcb1a6f4ad75e4737d573e5d5511480');
     }
 
     // Sanity check

@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
+set -e
 
+# Set the deployer address to match the uniswap testnet deployer
+DEPLOYER=0xe73e800882b6EC0Cde30799be4aB1d941fF1A125
+
+# Set the factory address for the testnet deployer and nonce
+FACTORY_ADDR=${FACTORY_ADDR:-0xe2f197885abe8ec7c866cFf76605FD06d4576218}
+
+# Set the factory codehash to match the current bytecode
+FACTORY_HASH=${FACTORY_HASH:-cb3743dcdfb75e8762e37a1ee92fe64f0539c60e171d3796f13503c095b8c52f}
+
+# Override these hardcoded values in the library
+sed -i '' -e "s/IUniswapV2Factory(.*);/IUniswapV2Factory($FACTORY_ADDR);/g" ./uniswap-v2-periphery/contracts/UniswapV2Library.sol
+sed -i '' -e "s/hex'.*' \/\//hex'$FACTORY_HASH' \/\//g" ./uniswap-v2-periphery/contracts/UniswapV2Library.sol
+
+# Run the tests as the DEPLOYER
 SOLC_FLAGS="--optimize --optimize-runs 999999" \
-DAPP_TEST_ADDRESS=0xe73e800882b6EC0Cde30799be4aB1d941fF1A125 \
-dapp --use solc:0.5.16 test -v
+DAPP_TEST_ADDRESS=$DEPLOYER dapp --use solc:0.5.16 test -v
