@@ -11,8 +11,8 @@ FACTORY_ADDR=${FACTORY_ADDR:-0xe2f197885abe8ec7c866cFf76605FD06d4576218}
 FACTORY_HASH=${FACTORY_HASH:-cb3743dcdfb75e8762e37a1ee92fe64f0539c60e171d3796f13503c095b8c52f}
 
 # Override these hardcoded values in the library
-sed -i '' -e "s/IUniswapV2Factory(.*);/IUniswapV2Factory($FACTORY_ADDR);/g" ./uniswap-v2-periphery/contracts/UniswapV2Library.sol
-sed -i '' -e "s/hex'.*' \/\//hex'$FACTORY_HASH' \/\//g" ./uniswap-v2-periphery/contracts/UniswapV2Library.sol
+sed -i -e "s/IUniswapV2Factory(.*);/IUniswapV2Factory($FACTORY_ADDR);/g" ./uniswap-v2-periphery/contracts/UniswapV2Library.sol
+sed -i -e "s/hex'.*' \/\//hex'$FACTORY_HASH' \/\//g" ./uniswap-v2-periphery/contracts/UniswapV2Library.sol
 
 # Run the tests as the DEPLOYER
 SOLC_FLAGS="--optimize --optimize-runs 999999" \
