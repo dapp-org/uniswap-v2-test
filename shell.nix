@@ -12,13 +12,14 @@ let
 
 in
   pkgs.mkShell {
+    src = null;
     name = "k-uniswap";
     buildInputs = with pkgs; [
       gnused
       dapptools.dapp
     ];
     shellHook = ''
-      export NIX_PATH="nixpkgs=${pkgs.path}"
+      export NIX_PATH="nixpkgs=${toString pkgs.path}"
       export DAPPTOOLS=${dappSrc}
     '';
   }
