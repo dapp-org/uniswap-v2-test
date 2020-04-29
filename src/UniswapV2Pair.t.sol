@@ -40,7 +40,7 @@ contract User {
 
 contract Callee0 {
 
-    function uniswapV2Call(address sender, uint amount0, uint amount1, bytes calldata data) external {
+    function uniswapV2Call(address, uint, uint, bytes calldata) external {
       UniswapV2Pair pair = UniswapV2Pair(msg.sender);
       address token0 = pair.token0();
       DSToken(token0).push(address(pair), 1 ether);
@@ -50,7 +50,7 @@ contract Callee0 {
 
 contract Callee1 {
 
-    function uniswapV2Call(address sender, uint amount0, uint amount1, bytes calldata data) external {
+    function uniswapV2Call(address, uint amount0, uint amount1, bytes calldata) external {
       UniswapV2Pair(msg.sender).swap(amount0, amount1, address(this), '');
     }
 
